@@ -1,0 +1,262 @@
+// Packages
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/rendering.dart';
+
+// Components
+import '../components/offer_container.dart';
+
+// Models
+import '../models/offer.dart';
+
+// Screens
+import 'product_page.dart';
+
+// Services
+import '../services/get_color.dart';
+
+class SearchResultsPage extends StatefulWidget {
+  final String queryString;
+  SearchResultsPage({Key key, @required this.queryString}) : super(key: key);
+
+  @override
+  _SearchResultsPageState createState() => _SearchResultsPageState();
+}
+
+class _SearchResultsPageState extends State<SearchResultsPage>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  bool _showAppbar = true; //this is to show app bar
+  ScrollController _scrollNavBarController =
+      new ScrollController(); // set controller on scrolling
+  bool isScrollingDown = false;
+  double bottomBarHeight = 75; // set bottom bar height
+
+  @override
+  void initState() {
+    super.initState();
+    myScroll();
+  }
+
+  @override
+  void dispose() {
+    _scrollNavBarController.removeListener(() {});
+    super.dispose();
+  }
+
+  void myScroll() async {
+    _scrollNavBarController.addListener(() {
+      if (_scrollNavBarController.position.userScrollDirection ==
+          ScrollDirection.reverse) {
+        if (!isScrollingDown) {
+          isScrollingDown = true;
+          hideBottomBar();
+        }
+      }
+      if (_scrollNavBarController.offset <= 0) {
+        if (isScrollingDown) {
+          isScrollingDown = false;
+          showBottomBar();
+        }
+      }
+    });
+  }
+
+  void showBottomBar() {
+    setState(() {
+      _showAppbar = true;
+    });
+  }
+
+  void hideBottomBar() {
+    setState(() {
+      _showAppbar = false;
+    });
+  }
+
+  Widget navBarReplacement() {
+    return _showAppbar ? SizedBox() : SizedBox(height: 44);
+  }
+
+  Widget _buildBody(BuildContext context) {
+    var querySnapshot = Firestore.instance
+        .collection("productsAU")
+        .where("tags", arrayContains: widget.queryString.toLowerCase())
+        .limit(100)
+        .snapshots();
+
+    return SafeArea(
+        child: ListView(
+      controller: _scrollNavBarController,
+      padding: EdgeInsets.symmetric(horizontal: 24),
+      children: <Widget>[
+        navBarReplacement(),
+        Container(
+          height: 60,
+          child: Text("Search Results",
+              style: TextStyle(fontSize: 35.0, fontWeight: FontWeight.w600)),
+          alignment: Alignment(-1, 0.0),
+        ),
+        SizedBox(
+          height: 20,
+        ),
+        StreamBuilder(
+            stream: querySnapshot,
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) {
+                return Container(
+                    child: Center(child: CircularProgressIndicator()));
+              }
+              var documents = snapshot.data.documents;
+              var length = documents.length;
+
+              List itemsToRemove = new List();
+
+              for (int i = 0; i < length; i++) {
+                try {
+                  if (documents[i]["startDate"] != null &&
+                      documents[i]["startDate"]
+                          .toDate()
+                          .isAfter(DateTime.now())) {
+                    itemsToRemove.add(documents[i]);
+                  } else {
+                    if (documents[i]["expiry"] != null &&
+                        documents[i]["expiry"]
+                            .toDate()
+                            .isBefore(DateTime.now())) {
+                      itemsToRemove.add(documents[i]);
+                    }
+                  }
+                } catch (e) {}
+              }
+
+              for (int i = 0; i < itemsToRemove.length; i++) {
+                documents.remove(itemsToRemove[i]);
+              }
+
+              length = documents.length;
+
+              if (length == 0) {
+                return Column(
+                  children: <Widget>[
+                    SizedBox(
+                      height: 30,
+                    ),
+                    Container(
+                      child: Column(
+                        children: <Widget>[
+                          Text("No Results!",
+                              style: TextStyle(
+                                  fontSize: 24.0, fontWeight: FontWeight.w600)),
+                          SizedBox(
+                            height: 5,
+                          ),
+                          Text(
+                              "We couldn't find any results for that search term.",
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                  fontSize: 18.0,
+                                  fontWeight: FontWeight.normal)),
+                        ],
+                      ),
+                    ),
+                    SizedBox(
+                      height: 20,
+                    )
+                  ],
+                );
+              } else {
+                return ListView.builder(
+                    shrinkWrap: true,
+                    physics: NeverScrollableScrollPhysics(),
+                    itemCount: length,
+                    itemBuilder: (context, i) {
+                      try {
+                        return Column(
+                          children: <Widget>[
+                            GestureDetector(
+                                child: offerContainer(
+                                    context,
+                                    false,
+                                    documents[i]["name"],
+                                    documents[i]["brand"],
+                                    documents[i]["percentOff"].toDouble(),
+                                    documents[i]["price"].toDouble(),
+                                    documents[i]["kj"].toDouble()),
+                                onTap: () {
+                                  Navigator.push<Widget>(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => ProductPage(
+                                        offer: Offer(
+                                            documents[i].documentID,
+                                            documents[i]["name"],
+                                            documents[i]["brand"],
+                                            documents[i]["imageURL"],
+                                            List<String>.from(
+                                                documents[i]["tags"]),
+                                            documents[i]["type"],
+                                            documents[i]["description"],
+                                            List<String>.from(
+                                                documents[i]["steps"]),
+                                            documents[i]["voucherCode"],
+                                            documents[i]["kj"].toDouble(),
+                                            documents[i]["appExclusive"],
+                                            documents[i]["url"],
+                                            documents[i]["price"].toDouble(),
+                                            documents[i]["percentOff"]
+                                                .toDouble(),
+                                            documents[i]["expiry"]),
+                                      ),
+                                    ),
+                                  );
+                                }),
+                            SizedBox(
+                              height: 20,
+                            )
+                          ],
+                        );
+                      } catch (e) {
+                        return Container();
+                      }
+                    });
+              }
+            }),
+        SizedBox(
+          height: 40,
+        ),
+        Container(
+          padding: EdgeInsets.symmetric(horizontal: 24),
+          child: Text(
+            "All names, logos and other trademarks belong to their owners. Their use is only for informational purposes.",
+            style: TextStyle(fontSize: 12),
+            textAlign: TextAlign.center,
+          ),
+        ),
+        SizedBox(
+          height: 20,
+        ),
+      ],
+    ));
+  }
+
+  @override
+  Widget build(context) {
+    super.build(context);
+
+    return Scaffold(
+      appBar: _showAppbar
+          ? CupertinoNavigationBar(
+              backgroundColor: getThemeColor(context),
+              border: Border(bottom: BorderSide(color: getThemeColor(context))))
+          : PreferredSize(
+              child: Container(),
+              preferredSize: Size(0.0, 0.0),
+            ),
+      body: _buildBody(context),
+    );
+  }
+}

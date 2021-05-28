@@ -1,0 +1,19 @@
+{
+  "search_terms": [{
+    "keyword": "D",
+    "id": 1,
+    "autocompleteTerm": "Dominos"
+  }, {
+    "keyword": "H",
+    "id": 2,
+    "autocompleteTerm": "Hungry Jack's"
+  }, {
+    "keyword": "M",
+    "id": 3,
+    "autocompleteTerm": "McDonald's"
+  }, {
+    "keyword": "S",
+    "id": 4,
+    "autocompleteTerm": "Subway"
+  }]
+}
